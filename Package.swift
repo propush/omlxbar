@@ -9,6 +9,12 @@ let package = Package(
             name: "omlxbar",
             path: "Sources/omlxbar",
             swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+        .testTarget(
+            name: "omlxbarTests",
+            dependencies: ["omlxbar"],
+            path: "Tests/omlxbarTests",
+            swiftSettings: [.swiftLanguageMode(.v5)]
         )
     ]
 )

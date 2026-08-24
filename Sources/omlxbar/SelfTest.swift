@@ -14,7 +14,11 @@ enum SelfTest {
         let client = OMLXClient()
         let config = client.config
 
-        print("config      \(config.baseURL.absoluteString)  api_key=\(config.apiKey == nil ? "none" : "set")")
+        print("config      \(config.displayTarget)  api_key=\(config.apiKey == nil ? "none" : "set")")
+        if let rejection = config.rejection {
+            print("REFUSED     \(rejection)")
+            return 2
+        }
 
         if CommandLine.arguments.contains("--alltime") { client.scope = .allTime }
         // --model <id> exercises the overlay's model filter. The overlay
@@ -26,10 +30,10 @@ enum SelfTest {
             client.modelFilter = CommandLine.arguments[flag + 1]
         }
         defer { client.modelFilter = storedFilter }
-        client.setOverlayVisible(true)
-        // setOverlayVisible kicks off its refreshes on a detached task; give
-        // them a moment to land before reading the published values.
-        try? await Task.sleep(for: .seconds(2))
+        // Awaited to completion rather than slept on: a single request may
+        // spend the whole 2 s timeout, so a fixed sleep reported a false
+        // picture under exactly the slow conditions this exists to diagnose.
+        await client.refreshAll()
 
         let dot: String
         switch client.state {
@@ -38,12 +42,21 @@ enum SelfTest {
         case .loadedIdle: dot = "YELLOW"
         case .loading: dot = "YELLOW (pulsing)"
         case .active: dot = "RED"
+        case .incompatible: dot = "ORANGE (hollow)"
+        case .misconfigured: dot = "ORANGE (hollow)"
         }
 
         print("state       \(client.state.label)  ->  dot \(dot)")
         print("hotkey      \(HotKey.currentDescription())")
         if client.authFailed { print("auth        REJECTED — check ~/.omlx/settings.json api_key") }
-        if client.usingOfflineStats { print("source      ~/.omlx/stats.json (server unreachable)") }
+        if client.usingOfflineStats {
+            let age = client.offlineStatsCapturedAt.map { "written \(Fmt.age($0))" } ?? "age unknown"
+            print("source      ~/.omlx/stats.json (server unreachable, \(age))")
+        }
+        if client.statsUnavailable { print("source      none — no attributable statistics to show") }
+        if client.isStale, let last = client.lastSuccess {
+            print("freshness   STALE — last good read \(Fmt.age(last))")
+        }
         if !client.device.summary.isEmpty { print("device      \(client.device.summary)") }
 
         let t = client.displayedTotals
@@ -132,6 +145,6 @@ enum SelfTest {
         }
 
         client.stop()
-        return client.state == .offline && !client.usingOfflineStats ? 1 : 0
+        return client.state.isUncertain && !client.usingOfflineStats ? 1 : 0
     }
 }

@@ -79,9 +79,18 @@ struct ActivityDTO: Decodable {
 
     enum CodingKeys: String, CodingKey { case activeModels }
 
+    init(activeModels: ActiveModelsDTO = ActiveModelsDTO()) {
+        self.activeModels = activeModels
+    }
+
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        activeModels = c.get(.activeModels, ActiveModelsDTO())
+        // Deliberately *not* lenient. The whole menubar dot is derived from
+        // this envelope, so an absent or renamed `active_models` must surface
+        // as a decoding failure. Defaulting it to empty would paint a green
+        // "no model" dot for a server we can no longer read — the one outcome
+        // worse than admitting we do not know.
+        activeModels = try c.decode(ActiveModelsDTO.self, forKey: .activeModels)
     }
 }
 

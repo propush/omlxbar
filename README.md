@@ -54,9 +54,24 @@ Environment overrides, for pointing at an oMLX instance elsewhere:
 
 | Variable | Effect |
 |---|---|
+| `OMLXBAR_URL` | full target URL, e.g. `https://box.local:8443` |
 | `OMLXBAR_HOST` | override the host |
 | `OMLXBAR_PORT` | override the port |
 | `OMLXBAR_API_KEY` | override the API key |
+
+**Transport.** Every request carries the API key, so plain HTTP is accepted only
+for loopback. A non-loopback host must be `https://` with a valid certificate;
+`OMLXBAR_HOST=box.local` is upgraded to HTTPS automatically, and an explicit
+`OMLXBAR_URL=http://box.local:8000` is refused outright rather than silently
+retargeted somewhere safer. A refused target shows an orange hollow dot and the
+reason in the overlay — the app never falls back to a different server.
+
+**When something is wrong.** The dot has three states that mean "do not trust
+what is below it": grey hollow (not responding), and orange hollow for either a
+refused target or a response this version cannot read. An unparseable payload is
+never reported as an idle server. Statistics recovered from `~/.omlx/stats.json`
+are labelled with the file's age, and are only ever used for a loopback target —
+that file describes this Mac, not a remote server.
 
 The global hotkey is stored in `UserDefaults` under `hotKeyCode` /
 `hotKeyModifiers` (Carbon key code and modifier mask). It defaults to ⌥⌘O and is
@@ -65,9 +80,12 @@ registered with `RegisterEventHotKey`, so it needs no Accessibility permission.
 ## Checking it works
 
 ```sh
+swift test                                  # decoding, refresh ordering, transport rules
+
 .build/debug/omlxbar --selftest             # one poll, prints what the UI would show
 .build/debug/omlxbar --selftest --alltime   # same, All-Time scope
 OMLXBAR_PORT=9 .build/debug/omlxbar --selftest   # exercise the offline path
+OMLXBAR_URL=http://example.com:8000 .build/debug/omlxbar --selftest   # refused target
 ```
 
 The self-test runs the same client, decoding and merge logic the overlay does,

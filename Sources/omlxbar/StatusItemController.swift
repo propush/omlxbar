@@ -85,7 +85,9 @@ final class StatusItemController: NSObject {
     }
 
     @objc private func openDashboard() {
-        NSWorkspace.shared.open(client.config.dashboardURL)
+        // nil when the configured target was refused; there is nothing to open.
+        guard let url = client.config.dashboardURL else { return }
+        NSWorkspace.shared.open(url)
     }
 
     /// Diagnostics for `--probe-popover`: where the overlay actually landed.

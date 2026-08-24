@@ -63,4 +63,12 @@ enum Fmt {
         if total < 86400 { return "\(total / 3600)h \(String(format: "%02d", (total % 3600) / 60))m" }
         return "\(total / 86400)d \((total % 86400) / 3600)h"
     }
+
+    /// How long ago something happened: "12s ago", "4m 03s ago". Used wherever
+    /// a number's age is the difference between trustworthy and misleading.
+    static func age(_ date: Date, now: Date = Date()) -> String {
+        let elapsed = now.timeIntervalSince(date)
+        guard elapsed >= 0 else { return "just now" }
+        return "\(duration(elapsed)) ago"
+    }
 }

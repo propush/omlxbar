@@ -43,7 +43,7 @@ struct OverlayView: View {
                 uptime: client.totals.uptimeSeconds
             )
 
-            if client.state == .offline { offlineBanner }
+            if let notice = statusNotice { noticeBanner(notice) }
 
             scopePicker
             tiles
@@ -54,7 +54,7 @@ struct OverlayView: View {
                 dimmed: client.usingOfflineStats
             )
 
-            if client.state != .offline {
+            if !client.state.isUncertain {
                 MemoryBar(
                     used: client.activity.modelMemoryUsed,
                     max: client.activity.modelMemoryMax,
@@ -74,24 +74,65 @@ struct OverlayView: View {
 
     // MARK: Sections
 
-    private var offlineBanner: some View {
-        HStack(spacing: 7) {
-            Image(systemName: client.authFailed ? "lock.fill" : "bolt.horizontal.circle")
-                .font(.system(size: 11))
-            Text(
-                client.authFailed
-                    ? "Rejected by oMLX — check the API key in ~/.omlx/settings.json"
-                    : "oMLX is not responding on \(client.config.host):\(client.config.port)"
+    private struct Notice {
+        let icon: String
+        let text: String
+        let tint: Color
+    }
+
+    /// The one thing the overlay must never do is look healthy when it is not.
+    /// Every state that means "these numbers may not be what you think" gets a
+    /// banner saying which one it is.
+    private var statusNotice: Notice? {
+        if let rejection = client.config.rejection {
+            return Notice(icon: "exclamationmark.triangle.fill", text: rejection, tint: Theme.accentOrange)
+        }
+        switch client.state {
+        case .misconfigured:
+            return Notice(
+                icon: "exclamationmark.triangle.fill",
+                text: "No usable oMLX target configured.",
+                tint: Theme.accentOrange
             )
-            .font(.system(size: 10.5))
-            .fixedSize(horizontal: false, vertical: true)
+        case .incompatible:
+            return Notice(
+                icon: "questionmark.circle.fill",
+                text: "oMLX answered with something this version cannot read — "
+                    + "the admin API may have changed. Nothing below is current.",
+                tint: Theme.accentOrange
+            )
+        case .offline:
+            return Notice(
+                icon: client.authFailed ? "lock.fill" : "bolt.horizontal.circle",
+                text: client.authFailed
+                    ? "Rejected by oMLX — check the API key in ~/.omlx/settings.json"
+                    : "oMLX is not responding on \(client.config.displayTarget)",
+                tint: Theme.accentYellow
+            )
+        default:
+            guard client.isStale, let last = client.lastSuccess else { return nil }
+            return Notice(
+                icon: "clock.badge.exclamationmark",
+                text: "Last successful read \(Fmt.age(last)) — these numbers may be behind.",
+                tint: Theme.accentYellow
+            )
+        }
+    }
+
+    private func noticeBanner(_ notice: Notice) -> some View {
+        HStack(spacing: 7) {
+            Image(systemName: notice.icon)
+                .font(.system(size: 11))
+            Text(notice.text)
+                .font(.system(size: 10.5))
+                .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }
-        .foregroundStyle(Theme.accentYellow)
+        .foregroundStyle(notice.tint)
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .card(fill: Theme.accentYellow.opacity(0.08))
+        .card(fill: notice.tint.opacity(0.08))
     }
 
     @ViewBuilder
@@ -106,7 +147,10 @@ struct OverlayView: View {
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
                     .background(Capsule().fill(Color.white.opacity(0.07)))
-                Text("from disk")
+                // The server persists periodically, so saying only "from
+                // disk" would imply a freshness the file does not have.
+                Text(client.offlineStatsCapturedAt.map { "from disk · \(Fmt.age($0))" }
+                    ?? "from disk · age unknown")
                     .font(.system(size: 9.5))
                     .foregroundStyle(Theme.faint)
             } else {
@@ -214,7 +258,7 @@ struct OverlayView: View {
             )
 
             if visibleSnapshots.isEmpty {
-                Text(filterName.map { "No stats for \($0)" } ?? "No models loaded")
+                Text(emptyModelsMessage)
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.faint)
                     .frame(maxWidth: .infinity)
@@ -240,8 +284,15 @@ struct OverlayView: View {
         )
     }
 
+    /// "No models loaded" is a claim about the server. When the server is
+    /// unreachable and nothing could be recovered we do not get to make it.
+    private var emptyModelsMessage: String {
+        if client.statsUnavailable { return "No statistics available" }
+        return filterName.map { "No stats for \($0)" } ?? "No models loaded"
+    }
+
     private var modelsTrailing: String? {
-        guard client.state != .offline else { return nil }
+        guard !client.state.isUncertain else { return nil }
         // Counted off the rows actually shown, so a filtered list never claims
         // the whole server's tally.
         let shown = visibleSnapshots
@@ -301,7 +352,7 @@ private struct FooterView: View {
     var body: some View {
         HStack(spacing: 10) {
             Button {
-                NSWorkspace.shared.open(client.config.dashboardURL)
+                if let url = client.config.dashboardURL { NSWorkspace.shared.open(url) }
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "arrow.up.forward.square")
@@ -310,7 +361,8 @@ private struct FooterView: View {
                 .font(.system(size: 11))
             }
             .buttonStyle(.plain)
-            .foregroundStyle(Theme.secondary)
+            .foregroundStyle(client.config.dashboardURL == nil ? Theme.faint : Theme.secondary)
+            .disabled(client.config.dashboardURL == nil)
 
             Spacer(minLength: 0)
 

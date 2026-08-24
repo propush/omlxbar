@@ -12,6 +12,11 @@ enum ServerState: Equatable {
     case loading
     /// At least one request is prefilling or generating right now.
     case active
+    /// The server answered, but not with anything we could parse. It is up and
+    /// we have no idea what it is doing — which is not the same as idle.
+    case incompatible
+    /// The configured target was refused before any request was sent.
+    case misconfigured
 
     /// Derived from `/admin/api/activity`.
     static func from(_ activity: ActiveModelsDTO) -> ServerState {
@@ -24,15 +29,24 @@ enum ServerState: Equatable {
     var color: NSColor {
         switch self {
         case .offline: return NSColor(calibratedWhite: 0.55, alpha: 1)
+        case .incompatible, .misconfigured:
+            return NSColor(srgbRed: 0.96, green: 0.55, blue: 0.16, alpha: 1)
         case .idleNoModel: return NSColor(srgbRed: 0.30, green: 0.79, blue: 0.44, alpha: 1)
         case .loadedIdle, .loading: return NSColor(srgbRed: 0.98, green: 0.76, blue: 0.20, alpha: 1)
         case .active: return NSColor(srgbRed: 0.94, green: 0.32, blue: 0.29, alpha: 1)
         }
     }
 
-    /// Offline is drawn as an empty ring so it reads differently from the
-    /// filled states even for a colour-blind viewer.
-    var isFilled: Bool { self != .offline }
+    /// The three "we cannot vouch for this" states are drawn as an empty ring
+    /// so they read differently from the filled states even for a colour-blind
+    /// viewer. None of them may ever look like a healthy green dot.
+    var isFilled: Bool { !isUncertain }
+
+    /// True when the dot is reporting a problem with the connection rather
+    /// than a fact about the server's workload.
+    var isUncertain: Bool {
+        self == .offline || self == .incompatible || self == .misconfigured
+    }
 
     /// Loading is the only state that animates.
     var pulses: Bool { self == .loading }
@@ -44,6 +58,8 @@ enum ServerState: Equatable {
         case .loadedIdle: return "Idle"
         case .loading: return "Loading"
         case .active: return "Active"
+        case .incompatible: return "Unreadable"
+        case .misconfigured: return "Not configured"
         }
     }
 

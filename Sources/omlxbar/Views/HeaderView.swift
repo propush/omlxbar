@@ -30,7 +30,7 @@ struct HeaderView: View {
                         .font(.system(size: 10.5))
                         .foregroundStyle(Theme.faint)
                 }
-                if state != .offline, uptime > 0 {
+                if !state.isUncertain, uptime > 0 {
                     if !device.summary.isEmpty {
                         Text("·").font(.system(size: 10.5)).foregroundStyle(Theme.faint)
                     }

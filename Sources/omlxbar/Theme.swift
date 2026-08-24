@@ -16,6 +16,9 @@ enum Theme {
     static let accentGreen = Color(red: 0.30, green: 0.79, blue: 0.44)
     static let accentYellow = Color(red: 0.98, green: 0.76, blue: 0.20)
     static let accentRed = Color(red: 0.94, green: 0.32, blue: 0.29)
+    /// Reserved for "we cannot vouch for what is on screen" — never for a
+    /// fact about the server's workload.
+    static let accentOrange = Color(red: 0.96, green: 0.55, blue: 0.16)
 
     static let corner: CGFloat = 12
     static let overlayWidth: CGFloat = 380
@@ -34,6 +37,7 @@ extension Color {
     static func forState(_ state: ServerState) -> Color {
         switch state {
         case .offline: return Color(white: 0.55)
+        case .incompatible, .misconfigured: return Theme.accentOrange
         case .idleNoModel: return Theme.accentGreen
         case .loadedIdle, .loading: return Theme.accentYellow
         case .active: return Theme.accentRed
