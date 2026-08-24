@@ -17,6 +17,15 @@ enum SelfTest {
         print("config      \(config.baseURL.absoluteString)  api_key=\(config.apiKey == nil ? "none" : "set")")
 
         if CommandLine.arguments.contains("--alltime") { client.scope = .allTime }
+        // --model <id> exercises the overlay's model filter. The overlay
+        // remembers its own choice, so put it back before exiting rather than
+        // letting a self-test rewrite what the menubar shows next launch.
+        let storedFilter = client.modelFilter
+        if let flag = CommandLine.arguments.firstIndex(of: "--model"),
+           flag + 1 < CommandLine.arguments.count {
+            client.modelFilter = CommandLine.arguments[flag + 1]
+        }
+        defer { client.modelFilter = storedFilter }
         client.setOverlayVisible(true)
         // setOverlayVisible kicks off its refreshes on a detached task; give
         // them a moment to land before reading the published values.
@@ -37,9 +46,10 @@ enum SelfTest {
         if client.usingOfflineStats { print("source      ~/.omlx/stats.json (server unreachable)") }
         if !client.device.summary.isEmpty { print("device      \(client.device.summary)") }
 
-        let t = client.totals
+        let t = client.displayedTotals
         print("")
-        print("scope       \(client.usingOfflineStats ? "All-Time (from disk)" : client.scope.label)")
+        let scopeLabel = client.usingOfflineStats ? "All-Time (from disk)" : client.scope.label
+        print("scope       \(scopeLabel)  ·  \(client.modelFilter ?? "All Models")")
         print("  Total Prefill Tokens   \(Fmt.int(t.totalPromptTokens))")
         print("  Cached Tokens          \(Fmt.int(t.totalCachedTokens))")
         print("  Cache Efficiency       \(Fmt.percent(t.cacheEfficiency))")
@@ -48,7 +58,7 @@ enum SelfTest {
         print("  Prompt Processing      \(Fmt.tps(t.avgPrefillTps)) tok/s")
         print("  Token Generation       \(Fmt.tps(t.avgGenerationTps)) tok/s")
         if !client.usingOfflineStats {
-            print("  Uptime                 \(Fmt.duration(t.uptimeSeconds))")
+            print("  Uptime                 \(Fmt.duration(client.totals.uptimeSeconds))")
         }
 
         let mem = client.activity

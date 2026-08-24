@@ -38,6 +38,35 @@ final class OMLXClient: ObservableObject {
         didSet { guard oldValue != scope else { return }; Task { await refreshStats() } }
     }
 
+    /// Which model's counters the overlay shows; nil is "All Models". Purely a
+    /// display filter — `refreshStats()` already fetches every model's slice,
+    /// so changing it costs no request.
+    @Published var modelFilter: String? = OMLXClient.storedModelFilter() {
+        didSet { guard oldValue != modelFilter else { return }; Self.store(modelFilter) }
+    }
+
+    /// The counters the overlay renders: server-wide, or one model's slice.
+    /// `totals` stays whole — the header's uptime is a property of the server.
+    var displayedTotals: StatsDTO {
+        guard let id = modelFilter else { return totals }
+        return perModel[id] ?? .empty
+    }
+
+    private static let modelFilterKey = "statsModelFilter"
+
+    private static func storedModelFilter() -> String? {
+        let id = UserDefaults.standard.string(forKey: modelFilterKey)
+        return (id?.isEmpty ?? true) ? nil : id
+    }
+
+    private static func store(_ id: String?) {
+        if let id, !id.isEmpty {
+            UserDefaults.standard.set(id, forKey: modelFilterKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: modelFilterKey)
+        }
+    }
+
     // MARK: Cadence
 
     private static let slowInterval: Duration = .seconds(3)

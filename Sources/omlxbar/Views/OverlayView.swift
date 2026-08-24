@@ -49,8 +49,8 @@ struct OverlayView: View {
             tiles
 
             SpeedSection(
-                prefillTps: client.totals.avgPrefillTps,
-                generationTps: client.totals.avgGenerationTps,
+                prefillTps: stats.avgPrefillTps,
+                generationTps: stats.avgGenerationTps,
                 dimmed: client.usingOfflineStats
             )
 
@@ -119,27 +119,66 @@ struct OverlayView: View {
                 .labelsHidden()
                 .frame(width: 170)
             }
+            modelPicker
             Spacer(minLength: 0)
         }
     }
+
+    /// The dashboard's model filter: "All Models" plus everything the overlay
+    /// knows about. Picking one narrows the tiles, the speed panel and the list
+    /// below to that model; the header and the memory bar stay server-wide.
+    private var modelPicker: some View {
+        Picker("", selection: $client.modelFilter) {
+            Text("All Models").tag(String?.none)
+            ForEach(modelChoices) { choice in
+                Text(choice.name).tag(String?.some(choice.id))
+            }
+        }
+        .pickerStyle(.menu)
+        .labelsHidden()
+        .frame(maxWidth: 178)
+    }
+
+    /// Every filterable model, by name. Deliberately not in the list's order —
+    /// that one moves busy models to the top, and a menu that reshuffles under
+    /// the pointer is worse than one that ignores what the server is doing.
+    /// A selection whose model has dropped out of the server's list stays in
+    /// the menu: without a tag matching it the picker would read "All Models"
+    /// while the numbers below stayed filtered.
+    private var modelChoices: [ModelChoice] {
+        var choices = allSnapshots.map { ModelChoice(id: $0.id, name: $0.displayName) }
+        if let id = client.modelFilter, !choices.contains(where: { $0.id == id }) {
+            choices.append(ModelChoice(id: id, name: id))
+        }
+        return choices.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    /// Name of the filtered model, for the empty state.
+    private var filterName: String? {
+        guard let id = client.modelFilter else { return nil }
+        return modelChoices.first { $0.id == id }?.name ?? id
+    }
+
+    /// What the tiles and the speed panel count, honouring the model filter.
+    private var stats: StatsDTO { client.displayedTotals }
 
     private var tiles: some View {
         VStack(spacing: 8) {
             HStack(spacing: 8) {
                 StatTile(
                     label: "Total Prefill Tokens",
-                    value: Fmt.int(client.totals.totalPromptTokens),
+                    value: Fmt.int(stats.totalPromptTokens),
                     dimmed: client.usingOfflineStats
                 )
                 StatTile(
                     label: "Cached Tokens",
-                    value: Fmt.int(client.totals.totalCachedTokens),
+                    value: Fmt.int(stats.totalCachedTokens),
                     dimmed: client.usingOfflineStats
                 )
             }
             StatTile(
                 label: "Cache Efficiency",
-                value: Fmt.percent(client.totals.cacheEfficiency),
+                value: Fmt.percent(stats.cacheEfficiency),
                 emphasized: true,
                 dimmed: client.usingOfflineStats
             )
@@ -147,14 +186,14 @@ struct OverlayView: View {
             // the dashboard has three tiles and so should this, or the overlay
             // grows taller than the space under the menubar.
             HStack(spacing: 5) {
-                Text(Fmt.int(client.totals.totalCompletionTokens))
+                Text(Fmt.int(stats.totalCompletionTokens))
                     .font(Theme.number(11))
                     .foregroundStyle(Theme.secondary)
                 Text("completion")
                     .font(.system(size: 10.5))
                     .foregroundStyle(Theme.faint)
                 Text("·").font(.system(size: 10.5)).foregroundStyle(Theme.faint)
-                Text(Fmt.int(client.totals.totalRequests))
+                Text(Fmt.int(stats.totalRequests))
                     .font(Theme.number(11))
                     .foregroundStyle(Theme.secondary)
                 Text("requests")
@@ -174,15 +213,15 @@ struct OverlayView: View {
                 trailing: modelsTrailing
             )
 
-            if snapshots.isEmpty {
-                Text("No models loaded")
+            if visibleSnapshots.isEmpty {
+                Text(filterName.map { "No stats for \($0)" } ?? "No models loaded")
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.faint)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 22)
             } else {
                 VStack(spacing: 0) {
-                    ForEach(Array(snapshots.enumerated()), id: \.element.id) { index, snapshot in
+                    ForEach(Array(visibleSnapshots.enumerated()), id: \.element.id) { index, snapshot in
                         if index > 0 {
                             Rectangle().fill(Theme.hairline).frame(height: 1)
                         }
@@ -203,20 +242,22 @@ struct OverlayView: View {
 
     private var modelsTrailing: String? {
         guard client.state != .offline else { return nil }
-        let loaded = client.activity.models.count
-        let waiting = client.activity.totalWaitingRequests
+        // Counted off the rows actually shown, so a filtered list never claims
+        // the whole server's tally.
+        let shown = visibleSnapshots
+        let loaded = shown.filter(\.isLoaded).count
+        let active = shown.reduce(0) { $0 + ($1.live?.activeRequests ?? 0) }
+        let waiting = shown.reduce(0) { $0 + ($1.live?.waitingRequests ?? 0) }
         var parts: [String] = []
         if loaded > 0 { parts.append("\(loaded) loaded") }
-        if client.activity.totalActiveRequests > 0 {
-            parts.append("\(client.activity.totalActiveRequests) active")
-        }
+        if active > 0 { parts.append("\(active) active") }
         if waiting > 0 { parts.append("\(waiting) waiting") }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     // MARK: Merge
 
-    private var snapshots: [ModelSnapshot] {
+    private var allSnapshots: [ModelSnapshot] {
         ModelSnapshot.merge(
             models: client.models,
             activity: client.activity,
@@ -225,11 +266,23 @@ struct OverlayView: View {
         )
     }
 
-    private var activeModelNames: [String] {
-        let busy = snapshots.filter(\.isBusy)
-        if !busy.isEmpty { return busy.map(\.displayName) }
-        return snapshots.filter(\.isLoaded).map(\.displayName)
+    private var visibleSnapshots: [ModelSnapshot] {
+        guard let id = client.modelFilter else { return allSnapshots }
+        return allSnapshots.filter { $0.id == id }
     }
+
+    /// The header describes the server, not the filter, so it sees every model.
+    private var activeModelNames: [String] {
+        let busy = allSnapshots.filter(\.isBusy)
+        if !busy.isEmpty { return busy.map(\.displayName) }
+        return allSnapshots.filter(\.isLoaded).map(\.displayName)
+    }
+}
+
+/// One entry in the model filter menu.
+private struct ModelChoice: Identifiable {
+    let id: String
+    let name: String
 }
 
 private struct ContentHeightKey: PreferenceKey {
