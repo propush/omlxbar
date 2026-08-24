@@ -5,6 +5,8 @@ the server is doing; clicking it — or pressing <kbd>⌥⌘O</kbd> from anywher
 drops down the same serving stats the web dashboard shows, for every model at
 once instead of one at a time.
 
+![The overlay, showing session stats for a resident model](docs/overlay.png)
+
 ## The dot
 
 | Dot | Meaning |
