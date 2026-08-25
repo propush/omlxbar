@@ -4,6 +4,7 @@
 #   ./scripts/bundle.sh              build + bundle into build/omlxbar.app
 #   ./scripts/bundle.sh --install    also copy into /Applications and relaunch
 #   ./scripts/bundle.sh --debug      bundle the debug build instead of release
+#   ./scripts/bundle.sh --arch arm64 --version 1.2.3
 
 set -euo pipefail
 
@@ -11,20 +12,67 @@ cd "$(dirname "$0")/.."
 
 CONFIG=release
 INSTALL=0
-for arg in "$@"; do
-	case "$arg" in
-		--install) INSTALL=1 ;;
-		--debug) CONFIG=debug ;;
-		*) echo "unknown option: $arg" >&2; exit 2 ;;
+ARCH=""
+VERSION=""
+
+usage() {
+	cat <<'EOF'
+usage: ./scripts/bundle.sh [--debug] [--install] [--arch arm64|x86_64] [--version X.Y.Z]
+EOF
+}
+
+while [ "$#" -gt 0 ]; do
+	case "$1" in
+		--install)
+			INSTALL=1
+			shift
+			;;
+		--debug)
+			CONFIG=debug
+			shift
+			;;
+		--arch)
+			[ "$#" -ge 2 ] || { echo "--arch requires a value" >&2; usage >&2; exit 2; }
+			ARCH="$2"
+			shift 2
+			;;
+		--version)
+			[ "$#" -ge 2 ] || { echo "--version requires a value" >&2; usage >&2; exit 2; }
+			VERSION="$2"
+			shift 2
+			;;
+		--help|-h)
+			usage
+			exit 0
+			;;
+		*)
+			echo "unknown option: $1" >&2
+			usage >&2
+			exit 2
+			;;
 	esac
 done
+
+if [ -n "$ARCH" ] && [ "$ARCH" != "arm64" ] && [ "$ARCH" != "x86_64" ]; then
+	echo "unsupported architecture: $ARCH" >&2
+	exit 2
+fi
+
+if [ -n "$VERSION" ] && ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+	echo "version must use X.Y.Z format: $VERSION" >&2
+	exit 2
+fi
 
 APP_NAME=omlxbar
 APP="build/${APP_NAME}.app"
 
 echo "==> swift build -c ${CONFIG}"
-swift build -c "$CONFIG"
-BIN="$(swift build -c "$CONFIG" --show-bin-path)/${APP_NAME}"
+BUILD_ARGS=(-c "$CONFIG")
+if [ -n "$ARCH" ]; then
+	BUILD_ARGS+=(--arch "$ARCH")
+fi
+swift build "${BUILD_ARGS[@]}"
+BIN="$(swift build "${BUILD_ARGS[@]}" --show-bin-path)/${APP_NAME}"
 [ -x "$BIN" ] || { echo "no binary at $BIN" >&2; exit 1; }
 
 echo "==> assembling ${APP}"
@@ -33,6 +81,11 @@ mkdir -p "${APP}/Contents/MacOS" "${APP}/Contents/Resources"
 cp "$BIN" "${APP}/Contents/MacOS/${APP_NAME}"
 cp Resources/Info.plist "${APP}/Contents/Info.plist"
 printf 'APPL????' > "${APP}/Contents/PkgInfo"
+
+if [ -n "$VERSION" ]; then
+	/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "${APP}/Contents/Info.plist"
+	/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "${APP}/Contents/Info.plist"
+fi
 
 # An ad-hoc signature gives the app a stable identity, which SMAppService
 # (Launch at Login) and the hotkey registration both rely on.

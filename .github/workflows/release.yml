@@ -1,0 +1,117 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-15
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      tag: ${{ steps.release.outputs.tag }}
+      asset_url: ${{ steps.release.outputs.asset_url }}
+      sha256: ${{ steps.release.outputs.sha256 }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Validate tag
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          if ! [[ "$tag" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "release tag must use vX.Y.Z format: $tag" >&2
+            exit 1
+          fi
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+      - name: Test
+        run: swift test
+      - name: Build release bundle
+        run: ./scripts/bundle.sh --arch arm64 --version "${{ steps.version.outputs.version }}"
+      - name: Verify release bundle
+        run: ./scripts/verify-bundle.sh build/omlxbar.app "${{ steps.version.outputs.version }}" arm64
+      - name: Package release
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ steps.version.outputs.version }}"
+          asset="omlxbar-${version}-arm64.zip"
+          ditto -c -k --sequesterRsrc --keepParent build/omlxbar.app "build/$asset"
+          (
+            cd build
+            shasum -a 256 "$asset" > "$asset.sha256"
+          )
+      - name: Publish or verify GitHub release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ steps.version.outputs.version }}"
+          tag="${GITHUB_REF_NAME}"
+          asset="omlxbar-${version}-arm64.zip"
+          checksum_asset="$asset.sha256"
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            release_assets="$(gh release view "$tag" --json assets --jq '.assets[].name')"
+            grep -Fxq "$asset" <<<"$release_assets" || { echo "existing release is missing $asset" >&2; exit 1; }
+            grep -Fxq "$checksum_asset" <<<"$release_assets" || { echo "existing release is missing $checksum_asset" >&2; exit 1; }
+            download_dir="$(mktemp -d)"
+            gh release download "$tag" --pattern "$checksum_asset" --dir "$download_dir"
+            checksum_line="$(<"$download_dir/$checksum_asset")"
+          else
+            gh release create "$tag" \
+              "build/$asset" \
+              "build/$checksum_asset" \
+              --verify-tag \
+              --generate-notes \
+              --title "omlxbar $version"
+            checksum_line="$(<"build/$checksum_asset")"
+          fi
+
+          sha256="${checksum_line%% *}"
+          if ! [[ "$sha256" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "invalid release checksum: $sha256" >&2
+            exit 1
+          fi
+
+          asset_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/${asset}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "asset_url=$asset_url" >> "$GITHUB_OUTPUT"
+          echo "sha256=$sha256" >> "$GITHUB_OUTPUT"
+
+  update-tap:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update Homebrew tap
+        env:
+          GH_TOKEN: ${{ secrets.TAP_DISPATCH_TOKEN }}
+          VERSION: ${{ needs.release.outputs.version }}
+          TAG: ${{ needs.release.outputs.tag }}
+          ASSET_URL: ${{ needs.release.outputs.asset_url }}
+          SHA256: ${{ needs.release.outputs.sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ -n "$GH_TOKEN" ] || { echo "TAP_DISPATCH_TOKEN is not configured" >&2; exit 1; }
+          gh workflow run update-omlxbar.yml \
+            --repo propush/homebrew-tap \
+            --ref main \
+            -f version="$VERSION" \
+            -f tag="$TAG" \
+            -f asset_url="$ASSET_URL" \
+            -f sha256="$SHA256"
