@@ -1,5 +1,18 @@
 # omlxbar
 
+## Install and run
+
+Requires an Apple silicon Mac with macOS 14 or later.
+
+```sh
+brew install --cask propush/tap/omlxbar
+xattr -dr com.apple.quarantine /Applications/omlxbar.app
+open -a omlxbar
+```
+
+The second command removes macOS quarantine from omlxbar. The app is ad-hoc
+signed and is not notarized by Apple.
+
 A macOS menubar app for [oMLX](https://omlx.ai). The dot colour tells you what
 the server is doing; clicking it — or pressing <kbd>⌥⌘O</kbd> from anywhere —
 drops down the same serving stats the web dashboard shows, for every model at
@@ -44,6 +57,29 @@ persists in `~/.omlx/stats.json`, so the history is still there.
 
 Requires Swift 6 and macOS 14+. The script ad-hoc signs the bundle, which
 Launch at Login needs.
+
+## Upgrade
+
+```sh
+brew upgrade --cask omlxbar
+xattr -dr com.apple.quarantine /Applications/omlxbar.app
+open -a omlxbar
+```
+
+## Release
+
+Releases use stable `vX.Y.Z` tags. Configure the repository secret
+`TAP_DISPATCH_TOKEN` with Actions write access to `propush/homebrew-tap`, then
+push a tag:
+
+```sh
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+The release workflow tests and packages the app, publishes the GitHub release,
+and starts the cask update in `propush/homebrew-tap`. Do not move or reuse a
+published tag; publish a new patch version instead.
 
 ## Configuration
 

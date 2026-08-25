@@ -1,0 +1,22 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Test
+        run: swift test
+      - name: Build release bundle
+        run: ./scripts/bundle.sh --arch arm64 --version 0.0.0
+      - name: Verify release bundle
+        run: ./scripts/verify-bundle.sh build/omlxbar.app 0.0.0 arm64
