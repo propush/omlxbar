@@ -15,6 +15,7 @@ enum Theme {
 
     static let accentGreen = Color(red: 0.30, green: 0.79, blue: 0.44)
     static let accentYellow = Color(red: 0.98, green: 0.76, blue: 0.20)
+    static let accentAmber = Color(red: 0.96, green: 0.62, blue: 0.04)
     static let accentRed = Color(red: 0.94, green: 0.32, blue: 0.29)
     /// Reserved for "we cannot vouch for what is on screen" — never for a
     /// fact about the server's workload.

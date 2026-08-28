@@ -56,11 +56,11 @@ struct OverlayView: View {
 
             if !client.state.isUncertain {
                 MemoryBar(
-                    used: client.activity.modelMemoryUsed,
-                    max: client.activity.modelMemoryMax,
-                    pressure: client.activity.memoryPressure,
-                    deviceMemoryGB: client.device.memoryGb,
-                    enforcerEnabled: client.globalSettings.memory?.prefillMemoryGuard ?? false
+                    presentation: MemoryPresentation(
+                        activity: client.activity,
+                        deviceMemoryGB: client.device.memoryGb,
+                        guardEnabled: client.globalSettings.memory?.prefillMemoryGuard
+                    )
                 )
             }
 

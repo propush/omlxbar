@@ -76,10 +76,12 @@ enum SelfTest {
 
         let mem = client.activity
         print("")
-        let enforcer = client.globalSettings.memory?.prefillMemoryGuard ?? false
-        let ceiling = (enforcer && mem.modelMemoryMax > 0)
-            ? Fmt.bytes(mem.modelMemoryMax) : "none (enforcer disabled)"
-        print("memory      \(Fmt.bytes(mem.modelMemoryUsed)) used, ceiling \(ceiling)")
+        let memory = MemoryPresentation(
+            activity: mem,
+            deviceMemoryGB: client.device.memoryGb,
+            guardEnabled: client.globalSettings.memory?.prefillMemoryGuard
+        )
+        print("memory      \(memory.diagnosticSummary)")
         print("requests    \(mem.totalActiveRequests) active, \(mem.totalWaitingRequests) waiting")
 
         print("")

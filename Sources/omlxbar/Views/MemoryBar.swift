@@ -1,66 +1,62 @@
 import SwiftUI
 
-/// Model memory in use against the enforcer ceiling, or against installed RAM
-/// when the memory enforcer is disabled (which is what the dashboard shows as
-/// "Enforcer disabled").
+/// Whole-process usage against the guard's soft and hard watermarks, or model memory
+/// against installed RAM when enforcement is disabled.
 struct MemoryBar: View {
-    let used: Int
-    let max: Int
-    let pressure: MemoryPressureDTO
-    /// Installed RAM, used as the denominator when there is no ceiling.
-    let deviceMemoryGB: Int
-    /// The dashboard's "Enforcer disabled" note tracks the global
-    /// memory.prefill_memory_guard flag, not memory_pressure.enabled — the
-    /// latter is true even with no ceiling configured.
-    let enforcerEnabled: Bool
-
-    private var denominator: Int {
-        if max > 0 { return max }
-        if deviceMemoryGB > 0 { return deviceMemoryGB * 1_073_741_824 }
-        return 0
-    }
-
-    private var fraction: Double {
-        guard denominator > 0 else { return 0 }
-        return Swift.min(1, Swift.max(0, Double(used) / Double(denominator)))
-    }
+    let presentation: MemoryPresentation
 
     private var barColor: Color {
-        switch pressure.pressureLevel {
-        case "hard", "critical": return Theme.accentRed
-        case "soft", "warn", "warning": return Theme.accentYellow
-        default: return Theme.accentGreen
+        switch presentation.barLevel {
+        case .green: return Theme.accentGreen
+        case .yellow: return Theme.accentYellow
+        case .amber: return Theme.accentAmber
+        case .orange: return Theme.accentOrange
+        case .red: return Theme.accentRed
         }
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
-                Text("Model Memory")
+                Text(presentation.title)
                     .tileLabel()
                 Spacer(minLength: 8)
-                if enforcerEnabled, denominator > 0, max > 0 {
-                    Text("\(Fmt.bytes(used)) / \(Fmt.bytes(denominator))")
-                        .font(Theme.number(11))
-                        .foregroundStyle(Theme.secondary)
-                } else {
+                if let statusText = presentation.statusText {
                     HStack(spacing: 6) {
-                        Text(Fmt.bytes(used))
+                        Text(Fmt.bytes(presentation.usedBytes))
                             .font(Theme.number(11))
                             .foregroundStyle(Theme.secondary)
-                        Text("Enforcer disabled")
+                        Text(statusText)
                             .font(.system(size: 10))
                             .foregroundStyle(Theme.faint)
                     }
+                } else {
+                    Text(presentation.valueText)
+                        .font(Theme.number(11))
+                        .foregroundStyle(Theme.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
                 }
             }
 
             GeometryReader { geo in
+                let markerX = Swift.min(
+                    Swift.max(0, geo.size.width - 1),
+                    geo.size.width * presentation.softMarkerFraction
+                )
                 ZStack(alignment: .leading) {
                     Capsule().fill(Color.white.opacity(0.07))
-                    Capsule()
-                        .fill(barColor)
-                        .frame(width: Swift.max(2, geo.size.width * fraction))
+                    if presentation.fraction > 0 {
+                        Capsule()
+                            .fill(barColor)
+                            .frame(width: Swift.max(2, geo.size.width * presentation.fraction))
+                    }
+                    if presentation.softMarkerFraction > 0 {
+                        Rectangle()
+                            .fill(Color.white.opacity(0.32))
+                            .frame(width: 1)
+                            .offset(x: markerX)
+                    }
                 }
             }
             .frame(height: 5)

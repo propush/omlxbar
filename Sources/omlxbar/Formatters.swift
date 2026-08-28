@@ -55,6 +55,15 @@ enum Fmt {
         return String(format: "%.0f MB", Double(value) / 1_048_576)
     }
 
+    /// Matches the oMLX pressure label: one decimal for GB, whole MB below it.
+    static func pressureBytes(_ value: Int) -> String {
+        guard value >= 1_048_576 else { return "0" }
+        if value >= 1_073_741_824 {
+            return String(format: "%.1f GB", Double(value) / 1_073_741_824)
+        }
+        return String(format: "%.0f MB", Double(value) / 1_048_576)
+    }
+
     /// Short duration: "42s", "7m 12s", "2h 04m", "3d 5h".
     static func duration(_ seconds: Double) -> String {
         let total = Int(max(0, seconds))

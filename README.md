@@ -35,8 +35,9 @@ once instead of one at a time.
 - **Cumulative tiles** — Total Prefill Tokens, Cached Tokens, Cache Efficiency,
   Completion Tokens, Requests, with a Session / All-Time toggle
 - **Average Speed** — Prompt Processing (excl. cached) and Token Generation
-- **Model Memory** — resident bytes against the enforcer ceiling, or against
-  installed RAM when the memory guard is off
+- **Memory** — whole-process usage against the live soft and hard guard
+  watermarks when the memory guard is on; resident model memory against
+  installed RAM when it is off
 - **Models** — every discovered model, resident ones first, each with its own
   token counts, cache efficiency, speeds and request count. Click a row to
   expand its parameters (context window, engine, temperature, top_p, top_k,
