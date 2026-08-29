@@ -22,6 +22,7 @@ SHORT_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' 
 BUILD_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$PLIST")"
 MINIMUM_SYSTEM="$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$PLIST")"
 ACTUAL_ARCHS="$(lipo -archs "$BIN")"
+EXPECTED_REQUIREMENT='designated => identifier "com.pushkin.omlxbar"'
 
 [ "$SHORT_VERSION" = "$VERSION" ] || {
 	echo "unexpected CFBundleShortVersionString: $SHORT_VERSION" >&2
@@ -41,4 +42,15 @@ ACTUAL_ARCHS="$(lipo -archs "$BIN")"
 }
 
 codesign --verify --deep --strict "$APP"
+SIGNING_DETAILS="$(codesign -dv --verbose=4 "$APP" 2>&1)"
+REQUIREMENT_DETAILS="$(codesign -d -r- "$APP" 2>&1)"
+REQUIREMENT="${REQUIREMENT_DETAILS##*$'\n'}"
+grep -q '^Signature=adhoc$' <<<"$SIGNING_DETAILS" || {
+	echo "bundle is not ad-hoc signed" >&2
+	exit 1
+}
+[ "$REQUIREMENT" = "$EXPECTED_REQUIREMENT" ] || {
+	echo "unexpected designated requirement: $REQUIREMENT" >&2
+	exit 1
+}
 echo "verified $APP: version=$VERSION arch=$ARCH macOS>=$MINIMUM_SYSTEM"

@@ -65,6 +65,7 @@ fi
 
 APP_NAME=omlxbar
 APP="build/${APP_NAME}.app"
+DESIGNATED_REQUIREMENT='=designated => identifier "com.pushkin.omlxbar"'
 
 echo "==> swift build -c ${CONFIG}"
 BUILD_ARGS=(-c "$CONFIG")
@@ -87,10 +88,11 @@ if [ -n "$VERSION" ]; then
 	/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "${APP}/Contents/Info.plist"
 fi
 
-# An ad-hoc signature gives the app a stable identity, which SMAppService
-# (Launch at Login) and the hotkey registration both rely on.
+# Keep a stable designated requirement across ad-hoc-signed releases. This is
+# an operational identity for Service Management and Homebrew approval
+# inheritance, not an Apple-verified publisher identity.
 echo "==> codesign (ad-hoc)"
-codesign --force --sign - --timestamp=none "$APP"
+codesign --force --sign - --timestamp=none --requirements "$DESIGNATED_REQUIREMENT" "$APP"
 codesign --verify --deep --strict "$APP"
 
 if [ "$INSTALL" -eq 1 ]; then

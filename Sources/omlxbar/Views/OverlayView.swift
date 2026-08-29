@@ -1,8 +1,8 @@
-import ServiceManagement
 import SwiftUI
 
 struct OverlayView: View {
     @ObservedObject var client: OMLXClient
+    @ObservedObject var launchAtLogin: LaunchAtLoginController
     /// Ceiling handed down from the status item: the usable height of the
     /// screen the menubar icon sits on. Without it a tall overlay (several
     /// models, a couple of rows expanded) does not fit below the menubar and
@@ -66,7 +66,7 @@ struct OverlayView: View {
 
             modelsSection
             Divider().overlay(Theme.hairline)
-            FooterView(client: client)
+            FooterView(client: client, launchAtLogin: launchAtLogin)
         }
         .padding(12)
         .frame(width: Theme.overlayWidth)
@@ -347,7 +347,17 @@ private struct ContentHeightKey: PreferenceKey {
 
 private struct FooterView: View {
     @ObservedObject var client: OMLXClient
-    @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
+    @ObservedObject var launchAtLogin: LaunchAtLoginController
+
+    private var launchAtLoginTitle: String {
+        if launchAtLogin.requiresApproval {
+            return "Launch at Login (Approval Required)"
+        }
+        if launchAtLogin.desiredEnabled && !launchAtLogin.isEffective {
+            return "Launch at Login (Unavailable)"
+        }
+        return "Launch at Login"
+    }
 
     var body: some View {
         HStack(spacing: 10) {
@@ -371,8 +381,18 @@ private struct FooterView: View {
                 .foregroundStyle(Theme.faint)
 
             Menu {
-                Toggle("Launch at Login", isOn: $launchAtLogin)
-                    .onChange(of: launchAtLogin) { _, enabled in setLaunchAtLogin(enabled) }
+                Toggle(
+                    launchAtLoginTitle,
+                    isOn: Binding(
+                        get: { launchAtLogin.desiredEnabled },
+                        set: { launchAtLogin.setDesiredEnabled($0) }
+                    )
+                )
+                if launchAtLogin.requiresApproval {
+                    Button("Open Login Items Settings…") {
+                        launchAtLogin.openLoginItemsSettings()
+                    }
+                }
                 Divider()
                 Button("Quit omlxbar") { NSApp.terminate(nil) }
             } label: {
@@ -383,21 +403,6 @@ private struct FooterView: View {
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
             .fixedSize()
-        }
-    }
-
-    private func setLaunchAtLogin(_ enabled: Bool) {
-        do {
-            if enabled {
-                try SMAppService.mainApp.register()
-            } else {
-                try SMAppService.mainApp.unregister()
-            }
-        } catch {
-            // Registration needs a signed bundle in a stable location; if it
-            // fails, put the switch back rather than lying about the state.
-            launchAtLogin = SMAppService.mainApp.status == .enabled
-            NSLog("omlxbar: launch-at-login change failed: \(error.localizedDescription)")
         }
     }
 }
