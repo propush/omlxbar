@@ -14,11 +14,17 @@ final class StatusItemController: NSObject {
     private var pulsePhase = false
     private var stateObservation: NSKeyValueObservation?
 
-    init(client: OMLXClient) {
+    init(client: OMLXClient, launchAtLogin: LaunchAtLoginController) {
         self.client = client
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         panel = OverlayPanel { maxHeight in
-            AnyView(OverlayView(client: client, maxContentHeight: maxHeight))
+            AnyView(
+                OverlayView(
+                    client: client,
+                    launchAtLogin: launchAtLogin,
+                    maxContentHeight: maxHeight
+                )
+            )
         }
         super.init()
 

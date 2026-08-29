@@ -6,12 +6,13 @@ Requires an Apple silicon Mac with macOS 14 or later.
 
 ```sh
 brew install --cask propush/tap/omlxbar
-xattr -dr com.apple.quarantine /Applications/omlxbar.app
 open -a omlxbar
 ```
 
-The second command removes macOS quarantine from omlxbar. The app is ad-hoc
-signed and is not notarized by Apple.
+omlxbar is ad-hoc signed and is not notarized by Apple, so macOS blocks its
+first launch. After the launch attempt, open **System Settings → Privacy &
+Security**, click **Open Anyway** for omlxbar, then confirm **Open**. This grants
+an exception for omlxbar without disabling Gatekeeper for other apps.
 
 A macOS menubar app for [oMLX](https://omlx.ai). The dot colour tells you what
 the server is doing; clicking it — or pressing <kbd>⌥⌘O</kbd> from anywhere —
@@ -63,9 +64,12 @@ Launch at Login needs.
 
 ```sh
 brew upgrade --cask omlxbar
-xattr -dr com.apple.quarantine /Applications/omlxbar.app
 open -a omlxbar
 ```
+
+Approval should carry across releases with the same app identity. If macOS
+blocks an upgraded version, repeat the **Open Anyway** steps above. The first
+release using the stable identity may require this one more time.
 
 ## Release
 

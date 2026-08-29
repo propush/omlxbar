@@ -136,8 +136,15 @@ enum SelfTest {
             print("screen      \(Int(f.width))x\(Int(f.height)) pt   visible \(Int(v.width))x\(Int(v.height)) pt at y=\(Int(v.origin.y))")
             print("            menubar inset \(Int(f.height - v.height - v.origin.y)) pt, safeAreaTop \(Int(screen.safeAreaInsets.top)) pt")
         }
+        let launchAtLoginSuite = "com.pushkin.omlxbar.selftest.\(UUID().uuidString)"
+        let launchAtLoginDefaults = UserDefaults(suiteName: launchAtLoginSuite)!
+        defer { launchAtLoginDefaults.removePersistentDomain(forName: launchAtLoginSuite) }
         let probe = NSHostingController(
-            rootView: OverlayView(client: client, maxContentHeight: 10_000)
+            rootView: OverlayView(
+                client: client,
+                launchAtLogin: LaunchAtLoginController(defaults: launchAtLoginDefaults),
+                maxContentHeight: 10_000
+            )
         )
         probe.view.layoutSubtreeIfNeeded()
         let fitting = probe.view.fittingSize

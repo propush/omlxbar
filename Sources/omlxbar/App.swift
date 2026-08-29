@@ -48,13 +48,14 @@ private final class SelfTestResult: @unchecked Sendable {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let client = OMLXClient()
+    private let launchAtLogin = LaunchAtLoginController()
     private var statusItem: StatusItemController?
     private var cancellables = Set<AnyCancellable>()
     /// Set by `--probe-popover`: open the overlay, report its geometry, quit.
     var probePopoverAfterLaunch = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        let controller = StatusItemController(client: client)
+        let controller = StatusItemController(client: client, launchAtLogin: launchAtLogin)
         statusItem = controller
 
         client.$state
@@ -65,6 +66,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .store(in: &cancellables)
 
         client.start()
+        launchAtLogin.reconcileInstalledBuild()
 
         if probePopoverAfterLaunch {
             Task { @MainActor in
@@ -88,6 +90,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 NSApp.terminate(nil)
             }
         }
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        launchAtLogin.refreshStatus()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
