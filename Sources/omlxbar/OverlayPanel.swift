@@ -20,6 +20,7 @@ final class OverlayPanel: NSPanel {
     private let hosting: NSHostingView<AnyView>
     private var dismissMonitors: [Any] = []
     private var onDismiss: (() -> Void)?
+    private weak var anchorWindow: NSWindow?
 
     init(content: @escaping (CGFloat) -> AnyView) {
         hosting = NSHostingView(rootView: content(400))
@@ -58,6 +59,7 @@ final class OverlayPanel: NSPanel {
         self.onDismiss = onDismiss
 
         guard let anchorWindow = anchorView.window else { return }
+        self.anchorWindow = anchorWindow
         let screen = anchorWindow.screen ?? NSScreen.main
         let visible = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
         let anchor = anchorWindow.convertToScreen(anchorView.convert(anchorView.bounds, to: nil))
@@ -77,8 +79,7 @@ final class OverlayPanel: NSPanel {
         let y = visible.maxY - height - Self.gap
 
         setFrame(NSRect(x: x, y: y, width: width, height: height), display: true)
-        orderFrontRegardless()
-        makeKey()
+        makeKeyAndOrderFront(nil)
         installDismissMonitors()
     }
 
@@ -113,7 +114,7 @@ final class OverlayPanel: NSPanel {
                 MainActor.assumeIsolated { self.dismiss() }
                 return nil
             }
-            if event.window !== self {
+            if event.window !== self, event.window !== self.anchorWindow {
                 MainActor.assumeIsolated { self.dismiss() }
             }
             return event

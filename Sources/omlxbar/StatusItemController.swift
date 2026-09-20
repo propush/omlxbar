@@ -66,9 +66,6 @@ final class StatusItemController: NSObject {
 
     private func show() {
         guard let button = statusItem.button else { return }
-        // Accessory apps must activate for the overlay to take keyboard focus
-        // when it is opened by the global hotkey rather than by a click.
-        NSApp.activate()
         panel.present(below: button) { [weak self] in
             self?.client.setOverlayVisible(false)
         }
