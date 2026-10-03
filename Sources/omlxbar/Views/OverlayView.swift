@@ -190,11 +190,15 @@ struct OverlayView: View {
     /// the menu: without a tag matching it the picker would read "All Models"
     /// while the numbers below stayed filtered.
     private var modelChoices: [ModelChoice] {
-        var choices = allSnapshots.map { ModelChoice(id: $0.id, name: $0.displayName) }
-        if let id = client.modelFilter, !choices.contains(where: { $0.id == id }) {
-            choices.append(ModelChoice(id: id, name: id))
+        var choices = allSnapshots.map {
+            ModelChoice(id: $0.id, name: $0.displayName, sortName: $0.info?.alias ?? $0.id)
         }
-        return choices.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        if let id = client.modelFilter, !choices.contains(where: { $0.id == id }) {
+            choices.append(ModelChoice(id: id, name: id, sortName: id))
+        }
+        return choices.sorted {
+            $0.sortName.localizedCaseInsensitiveCompare($1.sortName) == .orderedAscending
+        }
     }
 
     /// Name of the filtered model, for the empty state.
@@ -334,6 +338,7 @@ struct OverlayView: View {
 private struct ModelChoice: Identifiable {
     let id: String
     let name: String
+    let sortName: String
 }
 
 private struct ContentHeightKey: PreferenceKey {

@@ -19,7 +19,16 @@ struct ModelSnapshot: Identifiable {
     var isLoading: Bool { live?.isLoading ?? info?.isLoading ?? false }
     var isBusy: Bool { (live?.activeRequests ?? 0) > 0 }
 
-    var displayName: String { info?.alias ?? id }
+    var displayName: String {
+        guard let alias = info?.alias else { return id }
+        return "[\(alias)] \(id)"
+    }
+
+    var tooltipName: String {
+        let fullName = info.flatMap { $0.displayName.isEmpty ? nil : $0.displayName } ?? id
+        guard let alias = info?.alias, alias != fullName else { return fullName }
+        return "[\(alias)] \(fullName)"
+    }
     var sizeFormatted: String { live?.sizeFormatted ?? info?.sizeFormatted ?? "" }
 
     /// Context window actually in force, mirroring
@@ -97,7 +106,9 @@ extension ModelSnapshot {
             let ra = a.stats?.totalRequests ?? 0
             let rb = b.stats?.totalRequests ?? 0
             if ra != rb { return ra > rb }
-            return a.displayName.localizedCaseInsensitiveCompare(b.displayName) == .orderedAscending
+            let nameA = a.info?.alias ?? a.id
+            let nameB = b.info?.alias ?? b.id
+            return nameA.localizedCaseInsensitiveCompare(nameB) == .orderedAscending
         }
     }
 }
@@ -135,6 +146,7 @@ struct ModelRow: View {
                 .foregroundStyle(model.isLoaded ? Theme.value : Theme.secondary)
                 .lineLimit(1)
                 .truncationMode(.middle)
+                .help(model.tooltipName)
 
             if model.info?.pinned == true {
                 Image(systemName: "pin.fill")
